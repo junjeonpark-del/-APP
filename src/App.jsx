@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import './App.css'
-const API_BASE_URL = 'https://baby-app-api.onrender.com'
 
 function BackHeader({ tag, title, avatarText, onBack }) {
   return (
@@ -428,7 +427,7 @@ function VoiceManagerPage({
       formData.append('description', 'User uploaded clone voice')
       formData.append('audio', audioFile)
 
-      const response = await fetch('http://localhost:3001/api/clone-voice', {
+      const response = await fetch(`${API_BASE_URL}/api/clone-voice`, {
         method: 'POST',
         body: formData,
       })
@@ -608,7 +607,7 @@ function GeneratePage({ profile, onSaveStory }) {
       setLoadingStory(true)
       setErrorMessage('')
 
-      const response = await fetch('http://localhost:3001/api/generate-story', {
+      const response = await fetch(`${API_BASE_URL}/api/generate-story`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -639,9 +638,7 @@ function GeneratePage({ profile, onSaveStory }) {
       setLoadingImages(true)
       setErrorMessage('')
 
-      const response = await fetch(
-        'http://localhost:3001/api/generate-images',
-        {
+      const response = await fetch(`${API_BASE_URL}/api/generate-images`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ story: result }),
@@ -680,9 +677,7 @@ function GeneratePage({ profile, onSaveStory }) {
       setLoadingAudio(true)
       setErrorMessage('')
 
-      const response = await fetch(
-        'http://localhost:3001/api/generate-cloned-audio',
-        {
+      const response = await fetch(`${API_BASE_URL}/api/generate-cloned-audio`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
