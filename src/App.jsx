@@ -1147,16 +1147,20 @@ const loadStories = async (userId) => {
   }
 }
 
-  const loadAllUserData = async (userId) => {
-  const [profileData, storiesData, voicesData] = await Promise.all([
-    loadProfile(userId),
-    loadStories(userId),
-    loadVoices(userId),
-  ])
+const loadAllUserData = async (userId) => {
+  try {
+    const [profileData, storiesData, voicesData] = await Promise.all([
+      loadProfile(userId),
+      loadStories(userId),
+      loadVoices(userId),
+    ])
 
-  setProfileState(profileData)
-  setStoryHistory(storiesData)
-  setVoices(voicesData)
+    setProfileState(profileData)
+    setStoryHistory(storiesData)
+    setVoices(voicesData)
+  } catch (error) {
+    console.error('loadAllUserData final error:', error)
+  }
 }
 
   const setProfile = async (nextProfile) => {
@@ -1319,9 +1323,7 @@ const loadStories = async (userId) => {
 
       setSession(session)
 
-      if (session?.user) {
-        await loadAllUserData(session.user.id)
-      } else {
+      if (!session?.user) {
         setProfileState({
           nickname: '',
           baby_age: '',
@@ -1333,6 +1335,10 @@ const loadStories = async (userId) => {
         })
         setStoryHistory([])
         setVoices([])
+      } else {
+        loadAllUserData(session.user.id).catch((error) => {
+          console.error('loadAllUserData init error:', error)
+        })
       }
     } catch (error) {
       console.error('init error:', error)
@@ -1345,33 +1351,34 @@ const loadStories = async (userId) => {
 
   const {
     data: { subscription },
-  } = supabase.auth.onAuthStateChange(async (_event, session) => {
-    try {
-      setSession(session)
+  } = supabase.auth.onAuthStateChange((_event, session) => {
+    setSession(session)
 
-      if (session?.user) {
-        await loadAllUserData(session.user.id)
-      } else {
-        setProfileState({
-          nickname: '',
-          baby_age: '',
-          gender: '未设置',
-          language: '中文',
-          style: '温柔安抚',
-          voice: '未设置',
-          default_voice_id: '',
-        })
-        setStoryHistory([])
-        setVoices([])
-      }
-
+    if (!session?.user) {
+      setProfileState({
+        nickname: '',
+        baby_age: '',
+        gender: '未设置',
+        language: '中文',
+        style: '温柔安抚',
+        voice: '未设置',
+        default_voice_id: '',
+      })
+      setStoryHistory([])
+      setVoices([])
       setSelectedStory(null)
       setActiveTab('home')
-    } catch (error) {
-      console.error('onAuthStateChange error:', error)
-    } finally {
       setLoading(false)
+      return
     }
+
+    setSelectedStory(null)
+    setActiveTab('home')
+    setLoading(false)
+
+    loadAllUserData(session.user.id).catch((error) => {
+      console.error('loadAllUserData auth change error:', error)
+    })
   })
 
   return () => {
