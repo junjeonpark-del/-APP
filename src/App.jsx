@@ -1,6 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import './App.css'
+
 const API_BASE_URL = 'https://baby-app-api.onrender.com'
+
+const SAMPLE_READING_TEXT = `大家好，今天我来读一段用于声音录制的示例文本。
+请用自然、平稳、清楚的语速朗读，不要太快，也不要太慢。
+清晨的阳光轻轻落在窗边，小鸟在树上安静地歌唱。
+花园里的风很温柔，树叶慢慢摇晃，像在和我们打招呼。
+一个小朋友抱着自己的小书包，慢慢走过开满花的小路。
+他看到一只可爱的小兔子，正在草地上安静地晒太阳。
+远处还有一条小河，河水轻轻流动，发出很轻很轻的声音。
+天空很蓝，云朵很白，整个世界都显得安静又明亮。
+如果你现在正在听这段话，请保持放松，用平常说话的感觉继续朗读。
+这样录下来的声音，会更适合后面用来做自然的陪伴朗读。
+谢谢你认真完成这段录音，接下来我们就可以继续下一步了。`
 
 function BackHeader({ tag, title, avatarText, onBack }) {
   return (
@@ -87,6 +100,7 @@ function AuthPage({ onLogin, onRegister }) {
     }
 
     const result = onLogin(loginForm)
+
     if (!result.success) {
       setMessage(result.message)
     } else {
@@ -101,7 +115,7 @@ function AuthPage({ onLogin, onRegister }) {
           <p className="auth-tag">AI母婴陪伴平台</p>
           <h1>{mode === 'login' ? '欢迎登录' : '创建账号'}</h1>
           <p className="auth-desc">
-            保存宝宝档案、已克隆声音、故事记录与个性化设置
+            保存宝宝档案、声音管理、故事记录与个性化设置
           </p>
         </div>
 
@@ -136,6 +150,7 @@ function AuthPage({ onLogin, onRegister }) {
               value={loginForm.email}
               onChange={handleLoginChange}
             />
+
             <label>密码</label>
             <input
               type="password"
@@ -144,7 +159,9 @@ function AuthPage({ onLogin, onRegister }) {
               value={loginForm.password}
               onChange={handleLoginChange}
             />
+
             {message && <p className="auth-message">{message}</p>}
+
             <button className="auth-main-btn" onClick={handleLogin}>
               登录进入
             </button>
@@ -161,6 +178,7 @@ function AuthPage({ onLogin, onRegister }) {
               value={registerForm.name}
               onChange={handleRegisterChange}
             />
+
             <label>邮箱</label>
             <input
               type="email"
@@ -169,6 +187,7 @@ function AuthPage({ onLogin, onRegister }) {
               value={registerForm.email}
               onChange={handleRegisterChange}
             />
+
             <label>密码</label>
             <input
               type="password"
@@ -177,6 +196,7 @@ function AuthPage({ onLogin, onRegister }) {
               value={registerForm.password}
               onChange={handleRegisterChange}
             />
+
             <label>确认密码</label>
             <input
               type="password"
@@ -185,7 +205,9 @@ function AuthPage({ onLogin, onRegister }) {
               value={registerForm.confirmPassword}
               onChange={handleRegisterChange}
             />
+
             {message && <p className="auth-message">{message}</p>}
+
             <button className="auth-main-btn" onClick={handleRegister}>
               注册账号
             </button>
@@ -196,7 +218,7 @@ function AuthPage({ onLogin, onRegister }) {
   )
 }
 
-function HomePage({ goToProfile, profile, goToContent, currentUser }) {
+function HomePage({ goToProfile, goToGenerate, profile, currentUser }) {
   return (
     <>
       <header className="top-bar">
@@ -215,88 +237,41 @@ function HomePage({ goToProfile, profile, goToContent, currentUser }) {
           <p className="banner-tag">今日推荐</p>
           <h2>
             {profile.age === '孕期'
-              ? '孕晚期舒缓胎教内容'
-              : `${profile.nickname}的晚安陪伴内容`}
+              ? '今晚来一段舒缓胎教陪伴'
+              : `${profile.nickname}的睡前故事时光`}
           </h2>
           <p>
             {profile.language}内容推荐 · 偏{profile.style}风格 · 默认使用
-            {profile.voice}
+            {profile.voice || '未设置'}
           </p>
+          <button onClick={goToGenerate}>立即生成</button>
         </div>
       </section>
 
       <section className="menu-grid">
-        <div className="menu-card" onClick={goToContent}>
-          <div className="icon">🤰</div>
-          <h3>胎教内容</h3>
-          <p>按孕周生成</p>
-        </div>
-        <div className="menu-card" onClick={goToContent}>
+        <div className="menu-card" onClick={goToGenerate}>
           <div className="icon">🌙</div>
           <h3>睡前故事</h3>
-          <p>温柔晚安故事</p>
+          <p>生成可直接朗读的故事</p>
         </div>
-        <div className="menu-card" onClick={goToContent}>
-          <div className="icon">🎨</div>
-          <h3>故事配图</h3>
-          <p>自动生成插图</p>
+
+        <div className="menu-card" onClick={goToGenerate}>
+          <div className="icon">🤰</div>
+          <h3>胎教内容</h3>
+          <p>按时长生成舒缓内容</p>
         </div>
+
         <div className="menu-card" onClick={goToProfile}>
           <div className="icon">🎤</div>
           <h3>声音管理</h3>
-          <p>保存克隆声音</p>
+          <p>上传或录制声音样本</p>
         </div>
-      </section>
-    </>
-  )
-}
 
-function ContentPage() {
-  const contentList = [
-    {
-      title: '孕晚期舒缓胎教',
-      desc: '适合晚上安静收听，帮助妈妈放松情绪',
-      tag: '胎教内容',
-      icon: '🤰',
-    },
-    {
-      title: '小月亮晚安故事',
-      desc: '适合 2-4 岁，温柔陪伴入睡',
-      tag: '睡前故事',
-      icon: '🌙',
-    },
-    {
-      title: '森林小熊插图故事',
-      desc: '故事配图模式，提升孩子想象体验',
-      tag: '故事配图',
-      icon: '🎨',
-    },
-  ]
-
-  return (
-    <>
-      <BackHeader tag="内容中心" title="精选内容" avatarText="内" />
-      <section className="content-tabs">
-        <div className="content-tab active">全部</div>
-        <div className="content-tab">胎教</div>
-        <div className="content-tab">故事</div>
-        <div className="content-tab">音频</div>
-      </section>
-
-      <section className="content-list">
-        {contentList.map((item, index) => (
-          <div className="content-item" key={index}>
-            <div className="content-left">
-              <div className="content-icon">{item.icon}</div>
-              <div>
-                <p className="content-tag">{item.tag}</p>
-                <h3>{item.title}</h3>
-                <p className="content-desc">{item.desc}</p>
-              </div>
-            </div>
-            <button className="play-btn">播放</button>
-          </div>
-        ))}
+        <div className="menu-card" onClick={goToProfile}>
+          <div className="icon">📚</div>
+          <h3>生成记录</h3>
+          <p>查看最近故事历史</p>
+        </div>
       </section>
     </>
   )
@@ -323,6 +298,7 @@ function StoryHistoryPage({ storyHistory, onDeleteStory, onOpenStory, onBack }) 
                   <span className="history-label">{item.label}</span>
                   <span className="history-time">{item.createdAt}</span>
                 </div>
+
                 <h3>{item.title}</h3>
                 <p>{item.meta}</p>
 
@@ -375,16 +351,6 @@ function StoryDetailPage({ selectedStory, onBack }) {
           ))}
         </div>
 
-        {selectedStory.imageUrls?.length > 0 && (
-          <div className="images-grid">
-            {selectedStory.imageUrls.map((url, index) => (
-              <div className="image-result-box" key={index}>
-                <img src={url} alt={`${selectedStory.title}-${index + 1}`} />
-              </div>
-            ))}
-          </div>
-        )}
-
         {selectedStory.audioUrl && (
           <audio controls className="audio-player" src={selectedStory.audioUrl}>
             您的浏览器不支持音频播放
@@ -404,9 +370,99 @@ function VoiceManagerPage({
 }) {
   const [voiceName, setVoiceName] = useState('')
   const [audioFile, setAudioFile] = useState(null)
+  const [recordedBlob, setRecordedBlob] = useState(null)
+  const [recording, setRecording] = useState(false)
   const [cloneLoading, setCloneLoading] = useState(false)
   const [cloneMessage, setCloneMessage] = useState('')
+  const [recordSeconds, setRecordSeconds] = useState(0)
+
   const fileInputRef = useRef(null)
+  const mediaRecorderRef = useRef(null)
+  const chunksRef = useRef([])
+  const timerRef = useRef(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+  }, [])
+
+  const resetSelectedAudio = () => {
+    setAudioFile(null)
+    setRecordedBlob(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const startRecording = async () => {
+    try {
+      setCloneMessage('')
+      resetSelectedAudio()
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setCloneMessage('当前浏览器不支持录音')
+        return
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mediaRecorder = new MediaRecorder(stream)
+
+      chunksRef.current = []
+      mediaRecorderRef.current = mediaRecorder
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunksRef.current.push(event.data)
+        }
+      }
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+
+        if (blob.size > 11 * 1024 * 1024) {
+          setRecordedBlob(null)
+          setCloneMessage('录音文件超过 11MB，请缩短录音时长后重试')
+        } else {
+          setRecordedBlob(blob)
+          setCloneMessage('录音已完成，可直接用于克隆声音')
+        }
+
+        stream.getTracks().forEach((track) => track.stop())
+      }
+
+      mediaRecorder.start()
+      setRecording(true)
+      setRecordSeconds(0)
+
+      timerRef.current = setInterval(() => {
+        setRecordSeconds((prev) => prev + 1)
+      }, 1000)
+    } catch (error) {
+      setCloneMessage('录音启动失败，请检查麦克风权限')
+    }
+  }
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && recording) {
+      mediaRecorderRef.current.stop()
+      setRecording(false)
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+  }
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0] || null
+    setRecordedBlob(null)
+
+    if (file && file.size > 11 * 1024 * 1024) {
+      setAudioFile(null)
+      setCloneMessage('上传文件超过 11MB，请更换更小的音频文件')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
+    setCloneMessage('')
+    setAudioFile(file)
+  }
 
   const handleCloneVoice = async () => {
     if (!voiceName.trim()) {
@@ -414,8 +470,10 @@ function VoiceManagerPage({
       return
     }
 
-    if (!audioFile) {
-      setCloneMessage('请先选择音频文件')
+    const selectedAudio = audioFile || recordedBlob
+
+    if (!selectedAudio) {
+      setCloneMessage('请先上传音频或录制音频')
       return
     }
 
@@ -426,7 +484,19 @@ function VoiceManagerPage({
       const formData = new FormData()
       formData.append('voiceName', voiceName)
       formData.append('description', 'User uploaded clone voice')
-      formData.append('audio', audioFile)
+
+      if (audioFile) {
+        formData.append('audio', audioFile)
+        formData.append('sourceType', 'upload')
+      } else {
+        formData.append(
+          'audio',
+          new File([recordedBlob], 'recorded-sample.webm', {
+            type: 'audio/webm',
+          })
+        )
+        formData.append('sourceType', 'record')
+      }
 
       const response = await fetch(`${API_BASE_URL}/api/clone-voice`, {
         method: 'POST',
@@ -444,7 +514,9 @@ function VoiceManagerPage({
         isDefault: voices.length === 0,
       }
 
-      const nextVoices = voices.length >= 5 ? [...voices.slice(0, 4), newVoice] : [newVoice, ...voices]
+      const nextVoices =
+        voices.length >= 5 ? [newVoice, ...voices.slice(0, 4)] : [newVoice, ...voices]
+
       onSaveVoices(nextVoices)
 
       if (voices.length === 0) {
@@ -457,7 +529,10 @@ function VoiceManagerPage({
 
       setVoiceName('')
       setAudioFile(null)
+      setRecordedBlob(null)
+      setRecordSeconds(0)
       if (fileInputRef.current) fileInputRef.current.value = ''
+
       setCloneMessage('声音克隆成功，已保存到声音管理')
     } catch (error) {
       setCloneMessage(error.message || '声音克隆失败')
@@ -505,7 +580,8 @@ function VoiceManagerPage({
 
       <section className="voice-form-card">
         <p className="voice-consent-text">
-          仅限上传本人或已获得明确授权的声音样本。
+          仅限上传本人或已获得明确授权的声音样本。免费 Web Service
+          的音频建议控制在 11MB 以内。
         </p>
 
         <label>声音名称</label>
@@ -516,16 +592,34 @@ function VoiceManagerPage({
           onChange={(e) => setVoiceName(e.target.value)}
         />
 
-        <label>上传音频样本</label>
+        <label>方式一：上传音频</label>
         <input
           ref={fileInputRef}
           type="file"
           accept="audio/*"
-          onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
+          onChange={handleFileChange}
         />
 
+        <label>方式二：浏览器录音</label>
+        <div className="record-actions">
+          {!recording ? (
+            <button className="history-view-btn" onClick={startRecording}>
+              开始录音
+            </button>
+          ) : (
+            <button className="history-delete-btn" onClick={stopRecording}>
+              停止录音（已录 {recordSeconds} 秒）
+            </button>
+          )}
+        </div>
+
+        <div className="record-text-box">
+          <p className="record-text-title">建议朗读文本（约 1 分钟）</p>
+          <p className="record-text-content">{SAMPLE_READING_TEXT}</p>
+        </div>
+
         <button className="generate-btn" onClick={handleCloneVoice}>
-          {cloneLoading ? '克隆中...' : '上传并克隆声音'}
+          {cloneLoading ? '克隆中...' : '保存并克隆声音'}
         </button>
 
         {cloneMessage && <p className="api-error-text">{cloneMessage}</p>}
@@ -586,7 +680,6 @@ function GeneratePage({ profile, onSaveStory }) {
 
   const [result, setResult] = useState(null)
   const [loadingStory, setLoadingStory] = useState(false)
-  const [loadingImages, setLoadingImages] = useState(false)
   const [loadingAudio, setLoadingAudio] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -632,45 +725,11 @@ function GeneratePage({ profile, onSaveStory }) {
     }
   }
 
-  const handleGenerateImages = async () => {
-    if (!result) return
-
-    try {
-      setLoadingImages(true)
-      setErrorMessage('')
-
-      const response = await fetch(`${API_BASE_URL}/api/generate-images`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ story: result }),
-        }
-      )
-
-      const data = await response.json()
-
-      if (!data.success) {
-        throw new Error(data.message || '插画生成失败')
-      }
-
-      const updatedStory = {
-        ...result,
-        imageUrls: data.imageUrls,
-      }
-
-      setResult(updatedStory)
-      onSaveStory(updatedStory)
-    } catch (error) {
-      setErrorMessage(error.message || '插画生成失败')
-    } finally {
-      setLoadingImages(false)
-    }
-  }
-
   const handleGenerateClonedAudio = async () => {
     if (!result) return
 
     if (!profile.defaultVoiceId) {
-      setErrorMessage('请先到“我的→声音管理”里设置默认声音')
+      setErrorMessage('请先到“我的 → 声音管理”里设置默认声音')
       return
     }
 
@@ -678,7 +737,9 @@ function GeneratePage({ profile, onSaveStory }) {
       setLoadingAudio(true)
       setErrorMessage('')
 
-      const response = await fetch(`${API_BASE_URL}/api/generate-cloned-audio`, {
+      const response = await fetch(
+        `${API_BASE_URL}/api/generate-cloned-audio`,
+        {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -718,7 +779,6 @@ function GeneratePage({ profile, onSaveStory }) {
           <option>睡前故事</option>
           <option>胎教内容</option>
           <option>声音陪伴</option>
-          <option>故事配图</option>
         </select>
 
         <label>风格</label>
@@ -735,8 +795,6 @@ function GeneratePage({ profile, onSaveStory }) {
           onChange={handleChange}
         >
           <option>中文</option>
-          <option>韩语</option>
-          <option>英文</option>
         </select>
 
         <label>预计朗读时长</label>
@@ -788,16 +846,6 @@ function GeneratePage({ profile, onSaveStory }) {
               ))}
             </div>
 
-            {result.imageUrls?.length > 0 && (
-              <div className="images-grid">
-                {result.imageUrls.map((url, index) => (
-                  <div className="image-result-box" key={index}>
-                    <img src={url} alt={`${result.title}-${index + 1}`} />
-                  </div>
-                ))}
-              </div>
-            )}
-
             {result.audioUrl && (
               <audio controls className="audio-player" src={result.audioUrl}>
                 您的浏览器不支持音频播放
@@ -810,9 +858,6 @@ function GeneratePage({ profile, onSaveStory }) {
               </button>
               <button className="story-sub-btn" onClick={handleGenerateStory}>
                 重新生成故事
-              </button>
-              <button className="story-sub-btn" onClick={handleGenerateImages}>
-                {loadingImages ? '插画生成中...' : '生成3张插画'}
               </button>
             </div>
           </div>
@@ -922,6 +967,7 @@ function ProfilePage({
               value={formData.nickname}
               onChange={handleChange}
             />
+
             <label>年龄</label>
             <input
               type="text"
@@ -929,6 +975,7 @@ function ProfilePage({
               value={formData.age}
               onChange={handleChange}
             />
+
             <label>性别</label>
             <select
               name="gender"
@@ -939,6 +986,7 @@ function ProfilePage({
               <option>男孩</option>
               <option>未设置</option>
             </select>
+
             <label>常用语言</label>
             <select
               name="language"
@@ -946,9 +994,8 @@ function ProfilePage({
               onChange={handleChange}
             >
               <option>中文</option>
-              <option>韩语</option>
-              <option>英文</option>
             </select>
+
             <label>喜欢风格</label>
             <select
               name="style"
@@ -999,17 +1046,17 @@ function ProfilePage({
         </div>
 
         <div className="profile-menu">
-          <div className="profile-menu-item">
-            <span>🎵</span>
-            <p>我的播放记录</p>
+          <div className="profile-menu-item" onClick={goToVoices}>
+            <span>🎤</span>
+            <p>声音管理</p>
+          </div>
+          <div className="profile-menu-item" onClick={goToHistory}>
+            <span>📚</span>
+            <p>生成记录</p>
           </div>
           <div className="profile-menu-item">
             <span>⭐</span>
             <p>我的收藏</p>
-          </div>
-          <div className="profile-menu-item" onClick={goToVoices}>
-            <span>🎤</span>
-            <p>声音管理</p>
           </div>
           <div className="profile-menu-item">
             <span>⚙️</span>
@@ -1136,6 +1183,7 @@ function App() {
     }
 
     setUsers([...users, newUser])
+
     localStorage.setItem(
       `baby_app_profile_${newUser.email}`,
       JSON.stringify(DEFAULT_PROFILE)
@@ -1225,13 +1273,11 @@ function App() {
         {activeTab === 'home' && (
           <HomePage
             goToProfile={() => setActiveTab('profile')}
-            goToContent={() => setActiveTab('content')}
+            goToGenerate={() => setActiveTab('generate')}
             profile={profile}
             currentUser={currentUser}
           />
         )}
-
-        {activeTab === 'content' && <ContentPage />}
 
         {activeTab === 'generate' && (
           <GeneratePage profile={profile} onSaveStory={handleSaveStory} />
@@ -1286,14 +1332,6 @@ function App() {
           </div>
 
           <div
-            className={`nav-item ${activeTab === 'content' ? 'active' : ''}`}
-            onClick={() => setActiveTab('content')}
-          >
-            <span>🎵</span>
-            <p>内容</p>
-          </div>
-
-          <div
             className={`nav-item ${activeTab === 'generate' ? 'active' : ''}`}
             onClick={() => setActiveTab('generate')}
           >
@@ -1303,7 +1341,7 @@ function App() {
 
           <div
             className={`nav-item ${
-              ['profile', 'history', 'storyDetail', 'voices'].includes(activeTab)
+              ['profile', 'voices', 'history', 'storyDetail'].includes(activeTab)
                 ? 'active'
                 : ''
             }`}
