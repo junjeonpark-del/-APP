@@ -44,49 +44,36 @@ function AuthPage() {
   const [loading, setLoading] = useState(false)
 
   const handleRegister = async () => {
-    if (!email || !password || !nickname) {
-      setMessage('请填写完整信息')
-      return
-    }
-
-    try {
-      setLoading(true)
-      setMessage('')
-
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      })
-
-      if (error) throw error
-
-      const user = data.user
-
-      if (user) {
-        const { error: profileError } = await supabase.from('profiles').upsert({
-          id: user.id,
-          email,
-          nickname,
-          baby_age: '',
-          gender: '未设置',
-          language: '中文',
-          style: '温柔安抚',
-          voice: '未设置',
-          default_voice_id: '',
-        })
-
-        if (profileError) throw profileError
-      }
-
-      setMessage('注册成功，请登录')
-      setMode('login')
-      setPassword('')
-    } catch (error) {
-      setMessage(error.message || '注册失败')
-    } finally {
-      setLoading(false)
-    }
+  if (!email || !password || !nickname) {
+    setMessage('请填写完整信息')
+    return
   }
+
+  try {
+    setLoading(true)
+    setMessage('')
+
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          nickname,
+        },
+      },
+    })
+
+    if (error) throw error
+
+    setMessage('注册成功，请登录')
+    setMode('login')
+    setPassword('')
+  } catch (error) {
+    setMessage(error.message || '注册失败')
+  } finally {
+    setLoading(false)
+  }
+}
 
   const handleLogin = async () => {
     if (!email || !password) {
