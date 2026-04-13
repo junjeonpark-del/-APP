@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import './App.css'
+import { supabase } from './lib/supabase'
 
 const API_BASE_URL = 'https://baby-app-api.onrender.com'
 
@@ -34,77 +35,79 @@ function BackHeader({ tag, title, avatarText, onBack }) {
   )
 }
 
-function AuthPage({ onLogin, onRegister }) {
+function AuthPage() {
   const [mode, setMode] = useState('login')
-  const [loginForm, setLoginForm] = useState({ email: '', password: '' })
-  const [registerForm, setRegisterForm] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-  })
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [nickname, setNickname] = useState('')
   const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const handleLoginChange = (e) => {
-    const { name, value } = e.target
-    setLoginForm({ ...loginForm, [name]: value })
-  }
-
-  const handleRegisterChange = (e) => {
-    const { name, value } = e.target
-    setRegisterForm({ ...registerForm, [name]: value })
-  }
-
-  const handleRegister = () => {
-    if (
-      !registerForm.name ||
-      !registerForm.email ||
-      !registerForm.password ||
-      !registerForm.confirmPassword
-    ) {
-      setMessage('请先把注册信息填写完整')
+  const handleRegister = async () => {
+    if (!email || !password || !nickname) {
+      setMessage('请填写完整信息')
       return
     }
 
-    if (registerForm.password !== registerForm.confirmPassword) {
-      setMessage('两次输入的密码不一致')
-      return
+    try {
+      setLoading(true)
+      setMessage('')
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      })
+
+      if (error) throw error
+
+      const user = data.user
+
+      if (user) {
+        const { error: profileError } = await supabase.from('profiles').upsert({
+          id: user.id,
+          email,
+          nickname,
+          baby_age: '',
+          gender: '未设置',
+          language: '中文',
+          style: '温柔安抚',
+          voice: '未设置',
+          default_voice_id: '',
+        })
+
+        if (profileError) throw profileError
+      }
+
+      setMessage('注册成功，请登录')
+      setMode('login')
+      setPassword('')
+    } catch (error) {
+      setMessage(error.message || '注册失败')
+    } finally {
+      setLoading(false)
     }
-
-    const result = onRegister({
-      name: registerForm.name,
-      email: registerForm.email,
-      password: registerForm.password,
-    })
-
-    if (!result.success) {
-      setMessage(result.message)
-      return
-    }
-
-    setMessage('注册成功，请登录')
-    setMode('login')
-    setLoginForm({ email: registerForm.email, password: '' })
-    setRegisterForm({
-      name: '',
-      email: '',
-      password: '',
-      confirmPassword: '',
-    })
   }
 
-  const handleLogin = () => {
-    if (!loginForm.email || !loginForm.password) {
+  const handleLogin = async () => {
+    if (!email || !password) {
       setMessage('请输入邮箱和密码')
       return
     }
 
-    const result = onLogin(loginForm)
-
-    if (!result.success) {
-      setMessage(result.message)
-    } else {
+    try {
+      setLoading(true)
       setMessage('')
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) throw error
+    } catch (error) {
+      setMessage(error.message || '登录失败')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -140,79 +143,47 @@ function AuthPage({ onLogin, onRegister }) {
           </button>
         </div>
 
-        {mode === 'login' && (
-          <div className="auth-form">
-            <label>邮箱</label>
-            <input
-              type="email"
-              name="email"
-              placeholder="请输入邮箱"
-              value={loginForm.email}
-              onChange={handleLoginChange}
-            />
+        <div className="auth-form">
+          {mode === 'register' && (
+            <>
+              <label>昵称</label>
+              <input
+                type="text"
+                placeholder="请输入昵称"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+              />
+            </>
+          )}
 
-            <label>密码</label>
-            <input
-              type="password"
-              name="password"
-              placeholder="请输入密码"
-              value={loginForm.password}
-              onChange={handleLoginChange}
-            />
+          <label>邮箱</label>
+          <input
+            type="email"
+            placeholder="请输入邮箱"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
 
-            {message && <p className="auth-message">{message}</p>}
+          <label>密码</label>
+          <input
+            type="password"
+            placeholder="请输入密码"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
 
+          {message && <p className="auth-message">{message}</p>}
+
+          {mode === 'login' ? (
             <button className="auth-main-btn" onClick={handleLogin}>
-              登录进入
+              {loading ? '登录中...' : '登录进入'}
             </button>
-          </div>
-        )}
-
-        {mode === 'register' && (
-          <div className="auth-form">
-            <label>昵称</label>
-            <input
-              type="text"
-              name="name"
-              placeholder="请输入昵称"
-              value={registerForm.name}
-              onChange={handleRegisterChange}
-            />
-
-            <label>邮箱</label>
-            <input
-              type="email"
-              name="email"
-              placeholder="请输入邮箱"
-              value={registerForm.email}
-              onChange={handleRegisterChange}
-            />
-
-            <label>密码</label>
-            <input
-              type="password"
-              name="password"
-              placeholder="请输入密码"
-              value={registerForm.password}
-              onChange={handleRegisterChange}
-            />
-
-            <label>确认密码</label>
-            <input
-              type="password"
-              name="confirmPassword"
-              placeholder="请再次输入密码"
-              value={registerForm.confirmPassword}
-              onChange={handleRegisterChange}
-            />
-
-            {message && <p className="auth-message">{message}</p>}
-
+          ) : (
             <button className="auth-main-btn" onClick={handleRegister}>
-              注册账号
+              {loading ? '注册中...' : '注册账号'}
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )
@@ -225,7 +196,7 @@ function HomePage({ goToProfile, goToGenerate, profile, currentUser }) {
         <div>
           <p className="small-text">AI母婴陪伴</p>
           <h1>安心孕育，温柔陪伴</h1>
-          <p className="welcome-user">欢迎你，{currentUser.name}</p>
+          <p className="welcome-user">欢迎你，{currentUser.email}</p>
         </div>
         <div className="avatar" onClick={goToProfile}>
           妈
@@ -236,9 +207,9 @@ function HomePage({ goToProfile, goToGenerate, profile, currentUser }) {
         <div className="banner-text">
           <p className="banner-tag">今日推荐</p>
           <h2>
-            {profile.age === '孕期'
+            {profile.baby_age === '孕期'
               ? '今晚来一段舒缓胎教陪伴'
-              : `${profile.nickname}的睡前故事时光`}
+              : `${profile.nickname || '宝宝'}的睡前故事时光`}
           </h2>
           <p>
             {profile.language}内容推荐 · 偏{profile.style}风格 · 默认使用
@@ -436,7 +407,7 @@ function VoiceManagerPage({
       timerRef.current = setInterval(() => {
         setRecordSeconds((prev) => prev + 1)
       }, 1000)
-    } catch (error) {
+    } catch {
       setCloneMessage('录音启动失败，请检查麦克风权限')
     }
   }
@@ -520,11 +491,12 @@ function VoiceManagerPage({
       onSaveVoices(nextVoices)
 
       if (voices.length === 0) {
-        setProfile({
+        const nextProfile = {
           ...profile,
           voice: newVoice.name,
-          defaultVoiceId: newVoice.voiceId,
-        })
+          default_voice_id: newVoice.voiceId,
+        }
+        setProfile(nextProfile)
       }
 
       setVoiceName('')
@@ -545,13 +517,14 @@ function VoiceManagerPage({
     const filtered = voices.filter((item) => item.voiceId !== voiceId)
     onSaveVoices(filtered)
 
-    if (profile.defaultVoiceId === voiceId) {
+    if (profile.default_voice_id === voiceId) {
       const nextDefault = filtered[0]
-      setProfile({
+      const nextProfile = {
         ...profile,
         voice: nextDefault ? nextDefault.name : '未设置',
-        defaultVoiceId: nextDefault ? nextDefault.voiceId : '',
-      })
+        default_voice_id: nextDefault ? nextDefault.voiceId : '',
+      }
+      setProfile(nextProfile)
     }
   }
 
@@ -562,11 +535,12 @@ function VoiceManagerPage({
     }))
     onSaveVoices(updated)
 
-    setProfile({
+    const nextProfile = {
       ...profile,
       voice: voice.name,
-      defaultVoiceId: voice.voiceId,
-    })
+      default_voice_id: voice.voiceId,
+    }
+    setProfile(nextProfile)
   }
 
   return (
@@ -641,7 +615,7 @@ function VoiceManagerPage({
                     <h3>{voice.name}</h3>
                     <p>{voice.createdAt}</p>
                   </div>
-                  {profile.defaultVoiceId === voice.voiceId && (
+                  {profile.default_voice_id === voice.voiceId && (
                     <span className="default-badge">默认</span>
                   )}
                 </div>
@@ -672,8 +646,8 @@ function VoiceManagerPage({
 function GeneratePage({ profile, onSaveStory }) {
   const [formData, setFormData] = useState({
     type: '睡前故事',
-    style: profile.style,
-    language: profile.language,
+    style: profile.style || '温柔安抚',
+    language: profile.language || '中文',
     topic: '',
     duration: '5',
   })
@@ -686,8 +660,8 @@ function GeneratePage({ profile, onSaveStory }) {
   useEffect(() => {
     setFormData((prev) => ({
       ...prev,
-      style: profile.style,
-      language: profile.language,
+      style: profile.style || '温柔安抚',
+      language: profile.language || '中文',
     }))
   }, [profile.style, profile.language])
 
@@ -728,7 +702,7 @@ function GeneratePage({ profile, onSaveStory }) {
   const handleGenerateClonedAudio = async () => {
     if (!result) return
 
-    if (!profile.defaultVoiceId) {
+    if (!profile.default_voice_id) {
       setErrorMessage('请先到“我的 → 声音管理”里设置默认声音')
       return
     }
@@ -743,7 +717,7 @@ function GeneratePage({ profile, onSaveStory }) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            voiceId: profile.defaultVoiceId,
+            voiceId: profile.default_voice_id,
             text: `${result.title}\n\n${result.content}`,
           }),
         }
@@ -761,7 +735,6 @@ function GeneratePage({ profile, onSaveStory }) {
       }
 
       setResult(updatedStory)
-      onSaveStory(updatedStory)
     } catch (error) {
       setErrorMessage(error.message || '克隆声音朗读失败')
     } finally {
@@ -814,7 +787,7 @@ function GeneratePage({ profile, onSaveStory }) {
         <input
           type="text"
           name="topic"
-          placeholder="例如：月亮、森林、小熊、勇敢"
+          placeholder="例如：月亮、森林、白雪公主、青蛙王子"
           value={formData.topic}
           onChange={handleChange}
         />
@@ -879,6 +852,7 @@ function ProfilePage({
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState(profile)
+  const [saveMessage, setSaveMessage] = useState('')
 
   useEffect(() => {
     setFormData(profile)
@@ -886,17 +860,57 @@ function ProfilePage({
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    setFormData({ ...formData, [name]: value })
+    setFormData({
+      ...formData,
+      [name]: value,
+    })
   }
 
-  const handleSave = () => {
-    setProfile(formData)
+  const saveProfileToSupabase = async (nextProfile) => {
+    try {
+      setSaveMessage('')
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        setSaveMessage('用户未登录')
+        return
+      }
+
+      const payload = {
+        id: user.id,
+        email: user.email,
+        nickname: nextProfile.nickname || '',
+        baby_age: nextProfile.baby_age || '',
+        gender: nextProfile.gender || '未设置',
+        language: nextProfile.language || '中文',
+        style: nextProfile.style || '温柔安抚',
+        voice: nextProfile.voice || '未设置',
+        default_voice_id: nextProfile.default_voice_id || '',
+        updated_at: new Date().toISOString(),
+      }
+
+      const { error } = await supabase.from('profiles').upsert(payload)
+      if (error) throw error
+
+      setProfile(payload)
+      setSaveMessage('保存成功')
+    } catch (error) {
+      setSaveMessage(error.message || '保存失败')
+    }
+  }
+
+  const handleSave = async () => {
     setIsEditing(false)
+    await saveProfileToSupabase(formData)
   }
 
   const handleCancel = () => {
     setFormData(profile)
     setIsEditing(false)
+    setSaveMessage('')
   }
 
   const recentStories = storyHistory.slice(0, 2)
@@ -935,23 +949,23 @@ function ProfilePage({
           <>
             <div className="profile-row">
               <span>宝宝昵称</span>
-              <strong>{profile.nickname}</strong>
+              <strong>{profile.nickname || '未设置'}</strong>
             </div>
             <div className="profile-row">
               <span>年龄</span>
-              <strong>{profile.age}</strong>
+              <strong>{profile.baby_age || '未设置'}</strong>
             </div>
             <div className="profile-row">
               <span>性别</span>
-              <strong>{profile.gender}</strong>
+              <strong>{profile.gender || '未设置'}</strong>
             </div>
             <div className="profile-row">
               <span>常用语言</span>
-              <strong>{profile.language}</strong>
+              <strong>{profile.language || '中文'}</strong>
             </div>
             <div className="profile-row">
               <span>喜欢风格</span>
-              <strong>{profile.style}</strong>
+              <strong>{profile.style || '温柔安抚'}</strong>
             </div>
             <div className="profile-row">
               <span>默认声音</span>
@@ -964,22 +978,22 @@ function ProfilePage({
             <input
               type="text"
               name="nickname"
-              value={formData.nickname}
+              value={formData.nickname || ''}
               onChange={handleChange}
             />
 
             <label>年龄</label>
             <input
               type="text"
-              name="age"
-              value={formData.age}
+              name="baby_age"
+              value={formData.baby_age || ''}
               onChange={handleChange}
             />
 
             <label>性别</label>
             <select
               name="gender"
-              value={formData.gender}
+              value={formData.gender || '未设置'}
               onChange={handleChange}
             >
               <option>女孩</option>
@@ -990,16 +1004,18 @@ function ProfilePage({
             <label>常用语言</label>
             <select
               name="language"
-              value={formData.language}
+              value={formData.language || '中文'}
               onChange={handleChange}
             >
               <option>中文</option>
+              <option>韩语</option>
+              <option>英文</option>
             </select>
 
             <label>喜欢风格</label>
             <select
               name="style"
-              value={formData.style}
+              value={formData.style || '温柔安抚'}
               onChange={handleChange}
             >
               <option>温柔安抚</option>
@@ -1008,6 +1024,8 @@ function ProfilePage({
             </select>
           </div>
         )}
+
+        {saveMessage && <p className="save-message">{saveMessage}</p>}
       </section>
 
       <section className="profile-section">
@@ -1072,181 +1090,179 @@ function ProfilePage({
   )
 }
 
-const DEFAULT_USERS = [
-  {
-    name: '测试用户',
-    email: 'test@example.com',
-    password: '123456',
-  },
-]
-
-const DEFAULT_PROFILE = {
-  nickname: '小月亮',
-  age: '2岁',
-  gender: '女孩',
-  language: '中文',
-  style: '温柔安抚',
-  voice: '未设置',
-  defaultVoiceId: '',
-}
-
 function App() {
-  const [users, setUsers] = useState(() => {
-    const savedUsers = localStorage.getItem('baby_app_users')
-    return savedUsers ? JSON.parse(savedUsers) : DEFAULT_USERS
-  })
-
-  const [currentUser, setCurrentUser] = useState(() => {
-    const savedCurrentUser = localStorage.getItem('baby_app_current_user')
-    return savedCurrentUser ? JSON.parse(savedCurrentUser) : null
-  })
-
+  const [session, setSession] = useState(null)
+  const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('home')
   const [selectedStory, setSelectedStory] = useState(null)
 
-  const [profile, setProfile] = useState(() => {
-    const savedCurrentUser = localStorage.getItem('baby_app_current_user')
-    if (!savedCurrentUser) return DEFAULT_PROFILE
-    const parsedUser = JSON.parse(savedCurrentUser)
-    const savedProfile = localStorage.getItem(
-      `baby_app_profile_${parsedUser.email}`
-    )
-    return savedProfile ? JSON.parse(savedProfile) : DEFAULT_PROFILE
+  const [profile, setProfileState] = useState({
+    nickname: '',
+    baby_age: '',
+    gender: '未设置',
+    language: '中文',
+    style: '温柔安抚',
+    voice: '未设置',
+    default_voice_id: '',
   })
 
-  const [storyHistory, setStoryHistory] = useState(() => {
-    const savedCurrentUser = localStorage.getItem('baby_app_current_user')
-    if (!savedCurrentUser) return []
-    const parsedUser = JSON.parse(savedCurrentUser)
-    const savedHistory = localStorage.getItem(
-      `baby_app_history_${parsedUser.email}`
-    )
-    return savedHistory ? JSON.parse(savedHistory) : []
-  })
+  const [storyHistory, setStoryHistory] = useState([])
+  const [voices, setVoices] = useState([])
 
-  const [voices, setVoices] = useState(() => {
-    const savedCurrentUser = localStorage.getItem('baby_app_current_user')
-    if (!savedCurrentUser) return []
-    const parsedUser = JSON.parse(savedCurrentUser)
-    const savedVoices = localStorage.getItem(
-      `baby_app_voices_${parsedUser.email}`
-    )
-    return savedVoices ? JSON.parse(savedVoices) : []
-  })
+  const saveProfileRemote = async (nextProfile) => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  useEffect(() => {
-    localStorage.setItem('baby_app_users', JSON.stringify(users))
-  }, [users])
+    if (!user) return
 
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem(
-        'baby_app_current_user',
-        JSON.stringify(currentUser)
-      )
+    const payload = {
+      id: user.id,
+      email: user.email,
+      nickname: nextProfile.nickname || '',
+      baby_age: nextProfile.baby_age || '',
+      gender: nextProfile.gender || '未设置',
+      language: nextProfile.language || '中文',
+      style: nextProfile.style || '温柔安抚',
+      voice: nextProfile.voice || '未设置',
+      default_voice_id: nextProfile.default_voice_id || '',
+      updated_at: new Date().toISOString(),
+    }
+
+    await supabase.from('profiles').upsert(payload)
+  }
+
+  const setProfile = async (nextProfile) => {
+    setProfileState(nextProfile)
+    await saveProfileRemote(nextProfile)
+  }
+
+  const loadProfile = async (userId) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single()
+
+    if (!error && data) {
+      setProfileState(data)
     } else {
-      localStorage.removeItem('baby_app_current_user')
+      setProfileState({
+        nickname: '',
+        baby_age: '',
+        gender: '未设置',
+        language: '中文',
+        style: '温柔安抚',
+        voice: '未设置',
+        default_voice_id: '',
+      })
     }
-  }, [currentUser])
+  }
 
   useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem(
-        `baby_app_profile_${currentUser.email}`,
-        JSON.stringify(profile)
+    const init = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      setSession(session)
+
+      if (session?.user) {
+        await loadProfile(session.user.id)
+      }
+
+      setLoading(false)
+    }
+
+    init()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setSession(session)
+
+      if (session?.user) {
+        await loadProfile(session.user.id)
+      } else {
+        setProfileState({
+          nickname: '',
+          baby_age: '',
+          gender: '未设置',
+          language: '中文',
+          style: '温柔安抚',
+          voice: '未设置',
+          default_voice_id: '',
+        })
+        setStoryHistory([])
+        setVoices([])
+      }
+
+      setSelectedStory(null)
+      setActiveTab('home')
+      setLoading(false)
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (session?.user?.email) {
+      const savedHistory = localStorage.getItem(
+        `baby_app_history_${session.user.email}`
       )
+      const savedVoices = localStorage.getItem(
+        `baby_app_voices_${session.user.email}`
+      )
+
+      setStoryHistory(savedHistory ? JSON.parse(savedHistory) : [])
+      setVoices(savedVoices ? JSON.parse(savedVoices) : [])
     }
-  }, [profile, currentUser])
+  }, [session?.user?.email])
 
   useEffect(() => {
-    if (currentUser) {
+    if (session?.user?.email) {
       localStorage.setItem(
-        `baby_app_history_${currentUser.email}`,
+        `baby_app_history_${session.user.email}`,
         JSON.stringify(storyHistory)
       )
     }
-  }, [storyHistory, currentUser])
+  }, [storyHistory, session?.user?.email])
 
   useEffect(() => {
-    if (currentUser) {
+    if (session?.user?.email) {
       localStorage.setItem(
-        `baby_app_voices_${currentUser.email}`,
+        `baby_app_voices_${session.user.email}`,
         JSON.stringify(voices)
       )
     }
-  }, [voices, currentUser])
+  }, [voices, session?.user?.email])
 
-  const handleRegister = (newUser) => {
-    const exists = users.some((user) => user.email === newUser.email)
-    if (exists) {
-      return { success: false, message: '该邮箱已注册' }
-    }
-
-    setUsers([...users, newUser])
-
-    localStorage.setItem(
-      `baby_app_profile_${newUser.email}`,
-      JSON.stringify(DEFAULT_PROFILE)
-    )
-    localStorage.setItem(
-      `baby_app_history_${newUser.email}`,
-      JSON.stringify([])
-    )
-    localStorage.setItem(
-      `baby_app_voices_${newUser.email}`,
-      JSON.stringify([])
-    )
-
-    return { success: true }
-  }
-
-  const handleLogin = (loginForm) => {
-    const foundUser = users.find(
-      (user) =>
-        user.email === loginForm.email && user.password === loginForm.password
-    )
-
-    if (!foundUser) {
-      return { success: false, message: '账号或密码错误' }
-    }
-
-    setCurrentUser(foundUser)
-    setActiveTab('home')
-    setSelectedStory(null)
-
-    const savedProfile = localStorage.getItem(
-      `baby_app_profile_${foundUser.email}`
-    )
-    const savedHistory = localStorage.getItem(
-      `baby_app_history_${foundUser.email}`
-    )
-    const savedVoices = localStorage.getItem(
-      `baby_app_voices_${foundUser.email}`
-    )
-
-    setProfile(savedProfile ? JSON.parse(savedProfile) : DEFAULT_PROFILE)
-    setStoryHistory(savedHistory ? JSON.parse(savedHistory) : [])
-    setVoices(savedVoices ? JSON.parse(savedVoices) : [])
-
-    return { success: true }
-  }
-
-  const handleLogout = () => {
-    setCurrentUser(null)
-    setActiveTab('home')
-    setProfile(DEFAULT_PROFILE)
-    setStoryHistory([])
-    setVoices([])
-    setSelectedStory(null)
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
   }
 
   const handleSaveStory = (story) => {
+    const storyForStorage = {
+      id: story.id,
+      label: story.label,
+      title: story.title,
+      meta: story.meta,
+      content: story.content,
+      createdAt: story.createdAt,
+    }
+
     setStoryHistory((prev) => {
-      const exists = prev.find((item) => item.id === story.id)
+      const exists = prev.find((item) => item.id === storyForStorage.id)
+
       if (exists) {
-        return prev.map((item) => (item.id === story.id ? story : item))
+        return prev.map((item) =>
+          item.id === storyForStorage.id ? storyForStorage : item
+        )
       }
-      return [story, ...prev].slice(0, 20)
+
+      return [storyForStorage, ...prev].slice(0, 10)
     })
   }
 
@@ -1263,8 +1279,16 @@ function App() {
     setActiveTab('storyDetail')
   }
 
-  if (!currentUser) {
-    return <AuthPage onLogin={handleLogin} onRegister={handleRegister} />
+  if (loading) {
+    return (
+      <div className="loading-page">
+        <div className="loading-card">加载中...</div>
+      </div>
+    )
+  }
+
+  if (!session) {
+    return <AuthPage />
   }
 
   return (
@@ -1275,7 +1299,7 @@ function App() {
             goToProfile={() => setActiveTab('profile')}
             goToGenerate={() => setActiveTab('generate')}
             profile={profile}
-            currentUser={currentUser}
+            currentUser={session.user}
           />
         )}
 
@@ -1287,7 +1311,7 @@ function App() {
           <ProfilePage
             profile={profile}
             setProfile={setProfile}
-            currentUser={currentUser}
+            currentUser={session.user}
             onLogout={handleLogout}
             storyHistory={storyHistory}
             goToHistory={() => setActiveTab('history')}
