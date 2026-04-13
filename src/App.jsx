@@ -44,36 +44,36 @@ function AuthPage() {
   const [loading, setLoading] = useState(false)
 
   const handleRegister = async () => {
-  if (!email || !password || !nickname) {
-    setMessage('请填写完整信息')
-    return
-  }
+    if (!email || !password || !nickname) {
+      setMessage('请填写完整信息')
+      return
+    }
 
-  try {
-    setLoading(true)
-    setMessage('')
+    try {
+      setLoading(true)
+      setMessage('')
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          nickname,
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            nickname,
+          },
         },
-      },
-    })
+      })
 
-    if (error) throw error
+      if (error) throw error
 
-    setMessage('注册成功，请登录')
-    setMode('login')
-    setPassword('')
-  } catch (error) {
-    setMessage(error.message || '注册失败')
-  } finally {
-    setLoading(false)
+      setMessage('注册成功，请登录')
+      setMode('login')
+      setPassword('')
+    } catch (error) {
+      setMessage(error.message || '注册失败')
+    } finally {
+      setLoading(false)
+    }
   }
-}
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -199,7 +199,8 @@ function HomePage({ goToProfile, goToGenerate, profile, currentUser }) {
               : `${profile.nickname || '宝宝'}的睡前故事时光`}
           </h2>
           <p>
-            {profile.language}内容推荐 · 偏{profile.style}风格 · 默认使用
+            {profile.language || '中文'}内容推荐 · 偏
+            {profile.style || '温柔安抚'}风格 · 默认使用
             {profile.voice || '未设置'}
           </p>
           <button onClick={goToGenerate}>立即生成</button>
@@ -323,7 +324,9 @@ function VoiceManagerPage({
   voices,
   profile,
   setProfile,
-  onSaveVoices,
+  onAddVoice,
+  onDeleteVoice,
+  onSetDefaultVoice,
   onBack,
 }) {
   const [voiceName, setVoiceName] = useState('')
@@ -468,14 +471,15 @@ function VoiceManagerPage({
       }
 
       const newVoice = {
-        ...data.voice,
+        id: data.voice.id,
+        name: data.voice.name,
+        voiceId: data.voice.voiceId,
+        sourceType: data.voice.sourceType,
+        createdAt: data.voice.createdAt,
         isDefault: voices.length === 0,
       }
 
-      const nextVoices =
-        voices.length >= 5 ? [newVoice, ...voices.slice(0, 4)] : [newVoice, ...voices]
-
-      onSaveVoices(nextVoices)
+      await onAddVoice(newVoice)
 
       if (voices.length === 0) {
         const nextProfile = {
@@ -483,7 +487,7 @@ function VoiceManagerPage({
           voice: newVoice.name,
           default_voice_id: newVoice.voiceId,
         }
-        setProfile(nextProfile)
+        await setProfile(nextProfile)
       }
 
       setVoiceName('')
@@ -498,36 +502,6 @@ function VoiceManagerPage({
     } finally {
       setCloneLoading(false)
     }
-  }
-
-  const handleDeleteVoice = (voiceId) => {
-    const filtered = voices.filter((item) => item.voiceId !== voiceId)
-    onSaveVoices(filtered)
-
-    if (profile.default_voice_id === voiceId) {
-      const nextDefault = filtered[0]
-      const nextProfile = {
-        ...profile,
-        voice: nextDefault ? nextDefault.name : '未设置',
-        default_voice_id: nextDefault ? nextDefault.voiceId : '',
-      }
-      setProfile(nextProfile)
-    }
-  }
-
-  const handleSetDefaultVoice = (voice) => {
-    const updated = voices.map((item) => ({
-      ...item,
-      isDefault: item.voiceId === voice.voiceId,
-    }))
-    onSaveVoices(updated)
-
-    const nextProfile = {
-      ...profile,
-      voice: voice.name,
-      default_voice_id: voice.voiceId,
-    }
-    setProfile(nextProfile)
   }
 
   return (
@@ -596,7 +570,7 @@ function VoiceManagerPage({
             <div className="history-empty">还没有保存的声音</div>
           ) : (
             voices.map((voice) => (
-              <div className="voice-card" key={voice.voiceId}>
+              <div className="voice-card" key={voice.id}>
                 <div className="voice-card-top">
                   <div>
                     <h3>{voice.name}</h3>
@@ -610,13 +584,13 @@ function VoiceManagerPage({
                 <div className="voice-actions">
                   <button
                     className="history-view-btn"
-                    onClick={() => handleSetDefaultVoice(voice)}
+                    onClick={() => onSetDefaultVoice(voice)}
                   >
                     设为默认
                   </button>
                   <button
                     className="history-delete-btn"
-                    onClick={() => handleDeleteVoice(voice.voiceId)}
+                    onClick={() => onDeleteVoice(voice)}
                   >
                     删除
                   </button>
@@ -678,7 +652,7 @@ function GeneratePage({ profile, onSaveStory }) {
       }
 
       setResult(data.story)
-      onSaveStory(data.story)
+      await onSaveStory(data.story)
     } catch (error) {
       setErrorMessage(error.message || '故事生成失败')
     } finally {
@@ -853,45 +827,15 @@ function ProfilePage({
     })
   }
 
-  const saveProfileToSupabase = async (nextProfile) => {
+  const handleSave = async () => {
     try {
+      setIsEditing(false)
       setSaveMessage('')
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        setSaveMessage('用户未登录')
-        return
-      }
-
-      const payload = {
-        id: user.id,
-        email: user.email,
-        nickname: nextProfile.nickname || '',
-        baby_age: nextProfile.baby_age || '',
-        gender: nextProfile.gender || '未设置',
-        language: nextProfile.language || '中文',
-        style: nextProfile.style || '温柔安抚',
-        voice: nextProfile.voice || '未设置',
-        default_voice_id: nextProfile.default_voice_id || '',
-        updated_at: new Date().toISOString(),
-      }
-
-      const { error } = await supabase.from('profiles').upsert(payload)
-      if (error) throw error
-
-      setProfile(payload)
+      await setProfile(formData)
       setSaveMessage('保存成功')
     } catch (error) {
       setSaveMessage(error.message || '保存失败')
     }
-  }
-
-  const handleSave = async () => {
-    setIsEditing(false)
-    await saveProfileToSupabase(formData)
   }
 
   const handleCancel = () => {
@@ -1096,32 +1040,11 @@ function App() {
   const [storyHistory, setStoryHistory] = useState([])
   const [voices, setVoices] = useState([])
 
-  const saveProfileRemote = async (nextProfile) => {
+  const getCurrentUser = async () => {
     const {
       data: { user },
     } = await supabase.auth.getUser()
-
-    if (!user) return
-
-    const payload = {
-      id: user.id,
-      email: user.email,
-      nickname: nextProfile.nickname || '',
-      baby_age: nextProfile.baby_age || '',
-      gender: nextProfile.gender || '未设置',
-      language: nextProfile.language || '中文',
-      style: nextProfile.style || '温柔安抚',
-      voice: nextProfile.voice || '未设置',
-      default_voice_id: nextProfile.default_voice_id || '',
-      updated_at: new Date().toISOString(),
-    }
-
-    await supabase.from('profiles').upsert(payload)
-  }
-
-  const setProfile = async (nextProfile) => {
-    setProfileState(nextProfile)
-    await saveProfileRemote(nextProfile)
+    return user
   }
 
   const loadProfile = async (userId) => {
@@ -1146,6 +1069,205 @@ function App() {
     }
   }
 
+  const loadStories = async (userId) => {
+    const { data, error } = await supabase
+      .from('stories')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+
+    if (!error && data) {
+      const mapped = data.map((item) => ({
+        id: item.id,
+        label: item.label,
+        title: item.title,
+        meta: item.meta,
+        content: item.content,
+        createdAt: new Date(item.created_at).toLocaleString(),
+      }))
+      setStoryHistory(mapped)
+    } else {
+      setStoryHistory([])
+    }
+  }
+
+  const loadVoices = async (userId) => {
+    const { data, error } = await supabase
+      .from('voices')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+
+    if (!error && data) {
+      const mapped = data.map((item) => ({
+        id: item.id,
+        name: item.name,
+        voiceId: item.voice_id,
+        sourceType: item.source_type,
+        isDefault: item.is_default,
+        createdAt: new Date(item.created_at).toLocaleString(),
+      }))
+      setVoices(mapped)
+    } else {
+      setVoices([])
+    }
+  }
+
+  const loadAllUserData = async (userId) => {
+    await Promise.all([loadProfile(userId), loadStories(userId), loadVoices(userId)])
+  }
+
+  const setProfile = async (nextProfile) => {
+    const user = await getCurrentUser()
+    if (!user) return
+
+    const payload = {
+      id: user.id,
+      email: user.email,
+      nickname: nextProfile.nickname || '',
+      baby_age: nextProfile.baby_age || '',
+      gender: nextProfile.gender || '未设置',
+      language: nextProfile.language || '中文',
+      style: nextProfile.style || '温柔安抚',
+      voice: nextProfile.voice || '未设置',
+      default_voice_id: nextProfile.default_voice_id || '',
+      updated_at: new Date().toISOString(),
+    }
+
+    const { error } = await supabase.from('profiles').upsert(payload)
+    if (error) throw error
+
+    setProfileState(payload)
+  }
+
+  const onSaveStory = async (story) => {
+    const user = await getCurrentUser()
+    if (!user) return
+
+    const storyForStorage = {
+      id: story.id,
+      user_id: user.id,
+      label: story.label,
+      title: story.title,
+      meta: story.meta,
+      content: story.content,
+      updated_at: new Date().toISOString(),
+    }
+
+    const { error } = await supabase.from('stories').upsert(storyForStorage)
+    if (error) throw error
+
+    await loadStories(user.id)
+  }
+
+  const onDeleteStory = async (storyId) => {
+    const user = await getCurrentUser()
+    if (!user) return
+
+    const { error } = await supabase
+      .from('stories')
+      .delete()
+      .eq('id', storyId)
+      .eq('user_id', user.id)
+
+    if (!error) {
+      setStoryHistory((prev) => prev.filter((item) => item.id !== storyId))
+      if (selectedStory?.id === storyId) {
+        setSelectedStory(null)
+        setActiveTab('history')
+      }
+    }
+  }
+
+  const onAddVoice = async (voice) => {
+    const user = await getCurrentUser()
+    if (!user) return
+
+    if (voice.isDefault) {
+      await supabase
+        .from('voices')
+        .update({ is_default: false, updated_at: new Date().toISOString() })
+        .eq('user_id', user.id)
+    }
+
+    const payload = {
+      id: voice.id,
+      user_id: user.id,
+      name: voice.name,
+      voice_id: voice.voiceId,
+      source_type: voice.sourceType || 'upload',
+      is_default: !!voice.isDefault,
+      updated_at: new Date().toISOString(),
+    }
+
+    const { error } = await supabase.from('voices').upsert(payload)
+    if (error) throw error
+
+    await loadVoices(user.id)
+  }
+
+  const onDeleteVoice = async (voice) => {
+    const user = await getCurrentUser()
+    if (!user) return
+
+    const { error } = await supabase
+      .from('voices')
+      .delete()
+      .eq('id', voice.id)
+      .eq('user_id', user.id)
+
+    if (!error) {
+      const remaining = voices.filter((item) => item.id !== voice.id)
+      setVoices(remaining)
+
+      if (profile.default_voice_id === voice.voiceId) {
+        const nextDefault = remaining[0]
+        await setProfile({
+          ...profile,
+          voice: nextDefault ? nextDefault.name : '未设置',
+          default_voice_id: nextDefault ? nextDefault.voiceId : '',
+        })
+
+        if (nextDefault) {
+          await onSetDefaultVoice(nextDefault)
+        }
+      }
+    }
+  }
+
+  const onSetDefaultVoice = async (voice) => {
+    const user = await getCurrentUser()
+    if (!user) return
+
+    await supabase
+      .from('voices')
+      .update({ is_default: false, updated_at: new Date().toISOString() })
+      .eq('user_id', user.id)
+
+    await supabase
+      .from('voices')
+      .update({ is_default: true, updated_at: new Date().toISOString() })
+      .eq('id', voice.id)
+      .eq('user_id', user.id)
+
+    await setProfile({
+      ...profile,
+      voice: voice.name,
+      default_voice_id: voice.voiceId,
+    })
+
+    await loadVoices(user.id)
+  }
+
+  const handleOpenStory = (story) => {
+    setSelectedStory(story)
+    setActiveTab('storyDetail')
+  }
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+  }
+
   useEffect(() => {
     const init = async () => {
       const {
@@ -1155,7 +1277,7 @@ function App() {
       setSession(session)
 
       if (session?.user) {
-        await loadProfile(session.user.id)
+        await loadAllUserData(session.user.id)
       }
 
       setLoading(false)
@@ -1169,7 +1291,7 @@ function App() {
       setSession(session)
 
       if (session?.user) {
-        await loadProfile(session.user.id)
+        await loadAllUserData(session.user.id)
       } else {
         setProfileState({
           nickname: '',
@@ -1193,78 +1315,6 @@ function App() {
       subscription.unsubscribe()
     }
   }, [])
-
-  useEffect(() => {
-    if (session?.user?.email) {
-      const savedHistory = localStorage.getItem(
-        `baby_app_history_${session.user.email}`
-      )
-      const savedVoices = localStorage.getItem(
-        `baby_app_voices_${session.user.email}`
-      )
-
-      setStoryHistory(savedHistory ? JSON.parse(savedHistory) : [])
-      setVoices(savedVoices ? JSON.parse(savedVoices) : [])
-    }
-  }, [session?.user?.email])
-
-  useEffect(() => {
-    if (session?.user?.email) {
-      localStorage.setItem(
-        `baby_app_history_${session.user.email}`,
-        JSON.stringify(storyHistory)
-      )
-    }
-  }, [storyHistory, session?.user?.email])
-
-  useEffect(() => {
-    if (session?.user?.email) {
-      localStorage.setItem(
-        `baby_app_voices_${session.user.email}`,
-        JSON.stringify(voices)
-      )
-    }
-  }, [voices, session?.user?.email])
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-  }
-
-  const handleSaveStory = (story) => {
-    const storyForStorage = {
-      id: story.id,
-      label: story.label,
-      title: story.title,
-      meta: story.meta,
-      content: story.content,
-      createdAt: story.createdAt,
-    }
-
-    setStoryHistory((prev) => {
-      const exists = prev.find((item) => item.id === storyForStorage.id)
-
-      if (exists) {
-        return prev.map((item) =>
-          item.id === storyForStorage.id ? storyForStorage : item
-        )
-      }
-
-      return [storyForStorage, ...prev].slice(0, 10)
-    })
-  }
-
-  const handleDeleteStory = (storyId) => {
-    setStoryHistory((prev) => prev.filter((item) => item.id !== storyId))
-    if (selectedStory?.id === storyId) {
-      setSelectedStory(null)
-      setActiveTab('history')
-    }
-  }
-
-  const handleOpenStory = (story) => {
-    setSelectedStory(story)
-    setActiveTab('storyDetail')
-  }
 
   if (loading) {
     return (
@@ -1291,7 +1341,7 @@ function App() {
         )}
 
         {activeTab === 'generate' && (
-          <GeneratePage profile={profile} onSaveStory={handleSaveStory} />
+          <GeneratePage profile={profile} onSaveStory={onSaveStory} />
         )}
 
         {activeTab === 'profile' && (
@@ -1312,7 +1362,9 @@ function App() {
             voices={voices}
             profile={profile}
             setProfile={setProfile}
-            onSaveVoices={setVoices}
+            onAddVoice={onAddVoice}
+            onDeleteVoice={onDeleteVoice}
+            onSetDefaultVoice={onSetDefaultVoice}
             onBack={() => setActiveTab('profile')}
           />
         )}
@@ -1320,7 +1372,7 @@ function App() {
         {activeTab === 'history' && (
           <StoryHistoryPage
             storyHistory={storyHistory}
-            onDeleteStory={handleDeleteStory}
+            onDeleteStory={onDeleteStory}
             onOpenStory={handleOpenStory}
             onBack={() => setActiveTab('profile')}
           />
