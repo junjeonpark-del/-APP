@@ -17,6 +17,10 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
+const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY
+const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/api/v1'
+const QWEN_VC_TARGET_MODEL = 'qwen3-tts-vc-2026-01-22'
+
 function numberToChinese(num) {
   const digits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九']
 
@@ -142,7 +146,7 @@ function getVariationRule(topic, type) {
 1. 场景：森林、花园、云朵世界、安静卧室、月夜小镇、星空列车、湖边、雨后山谷、童话城堡、海边夜色
 2. 陪伴对象：小兔子、小熊、小鹿、小鲸鱼、小狐狸、小猫头鹰、小云朵、小星星、月亮姐姐、风精灵
 3. 情绪主线：被安慰、被陪伴、慢慢放松、夜晚小冒险、实现小愿望、安静等待、温柔对话、慢慢入睡
-4. 结尾方式：自然闭眼、轻轻晚安、梦境开启、月光陪伴、被抱抱、安静休息、心情放松
+4. 结尾方式：自然闭眼、轻轻晚安、梦境开启、月光陪伴、被抱抱、安静休息
 
 额外要求：
 - 不要总是出现“窗边、月亮、小云朵”这一组固定搭配
@@ -205,7 +209,7 @@ function getTypeRules(type) {
 
 function buildStoryPrompt({ type, style, language, topic, duration, profile }) {
   const nickname = profile?.nickname || '宝宝'
-  const age = profile?.age || '2岁'
+  const age = profile?.baby_age || '2岁'
   const voice = profile?.voice || '默认声音'
   const finalTopic = topic?.trim() || '月亮'
   const lengthRule = getLengthRule(duration, type)
@@ -255,6 +259,40 @@ ${variationRule}
   "content": "正文"
 }
 `.trim()
+}
+
+function getAudioMimeType(file) {
+  const mime = file?.mimetype || ''
+  const name = file?.originalname?.toLowerCase() || ''
+
+  if (mime.includes('mpeg') || mime.includes('mp3') || name.endsWith('.mp3')) {
+    return 'audio/mpeg'
+  }
+  if (mime.includes('wav') || name.endsWith('.wav')) {
+    return 'audio/wav'
+  }
+  if (mime.includes('m4a') || mime.includes('mp4') || name.endsWith('.m4a')) {
+    return 'audio/mp4'
+  }
+  if (mime.includes('webm') || name.endsWith('.webm')) {
+    return 'audio/webm'
+  }
+
+  return 'application/octet-stream'
+}
+
+function fileBufferToDataUri(file) {
+  const mimeType = getAudioMimeType(file)
+  const base64 = Buffer.from(file.buffer).toString('base64')
+  return `data:${mimeType};base64,${base64}`
+}
+
+async function fetchArrayBufferFromUrl(url) {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`下载音频失败：${response.status}`)
+  }
+  return await response.arrayBuffer()
 }
 
 app.get('/api/health', (req, res) => {
@@ -318,12 +356,10 @@ app.post('/api/generate-story', async (req, res) => {
 
 app.post('/api/clone-voice', upload.single('audio'), async (req, res) => {
   try {
-    const apiKey = process.env.ELEVENLABS_API_KEY
-
-    if (!apiKey) {
+    if (!DASHSCOPE_API_KEY) {
       return res.status(500).json({
         success: false,
-        message: '缺少 ELEVENLABS_API_KEY',
+        message: '缺少 DASHSCOPE_API_KEY',
       })
     }
 
@@ -334,33 +370,49 @@ app.post('/api/clone-voice', upload.single('audio'), async (req, res) => {
       })
     }
 
-    const voiceName = req.body.voiceName?.trim() || `我的声音-${Date.now()}`
-    const description =
-      req.body.description?.trim() || 'Uploaded from AI baby app'
+    const voiceNameRaw = req.body.voiceName?.trim() || `voice_${Date.now()}`
+    const voiceName = voiceNameRaw.replace(/[^\w]/g, '_').slice(0, 16) || `voice_${Date.now()}`
+    const dataUri = fileBufferToDataUri(req.file)
 
-    const formData = new FormData()
-    const blob = new Blob([req.file.buffer], {
-      type: req.file.mimetype || 'audio/webm',
-    })
-
-    formData.append('name', voiceName)
-    formData.append('description', description)
-    formData.append('files', blob, req.file.originalname)
-
-    const response = await fetch('https://api.elevenlabs.io/v1/voices/add', {
-      method: 'POST',
-      headers: {
-        'xi-api-key': apiKey,
-      },
-      body: formData,
-    })
+    const response = await fetch(
+      `${DASHSCOPE_BASE_URL}/services/audio/tts/customization`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${DASHSCOPE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'qwen-voice-enrollment',
+          input: {
+            action: 'create',
+            target_model: QWEN_VC_TARGET_MODEL,
+            preferred_name: voiceName,
+            audio: {
+              data: dataUri,
+            },
+            language: 'zh',
+          },
+        }),
+      }
+    )
 
     const data = await response.json()
 
     if (!response.ok) {
       return res.status(response.status).json({
         success: false,
-        message: data?.detail?.message || data?.message || '声音克隆失败',
+        message: data?.message || '千问声音克隆失败',
+        raw: data,
+      })
+    }
+
+    const clonedVoice = data?.output?.voice
+
+    if (!clonedVoice) {
+      return res.status(500).json({
+        success: false,
+        message: '未获取到千问返回的音色ID',
         raw: data,
       })
     }
@@ -369,18 +421,17 @@ app.post('/api/clone-voice', upload.single('audio'), async (req, res) => {
       success: true,
       voice: {
         id: Date.now().toString(),
-        name: voiceName,
-        voiceId: data.voice_id,
+        name: req.body.voiceName?.trim() || voiceName,
+        voiceId: clonedVoice,
         createdAt: new Date().toLocaleString(),
         sourceType: req.body.sourceType || 'upload',
-        requiresVerification: !!data.requires_verification,
       },
     })
   } catch (error) {
-    console.error('clone-voice error:', error)
+    console.error('qwen clone-voice error:', error)
     res.status(500).json({
       success: false,
-      message: '声音克隆失败',
+      message: '千问声音克隆失败',
       error: error?.message || 'unknown error',
     })
   }
@@ -388,12 +439,10 @@ app.post('/api/clone-voice', upload.single('audio'), async (req, res) => {
 
 app.post('/api/generate-cloned-audio', async (req, res) => {
   try {
-    const apiKey = process.env.ELEVENLABS_API_KEY
-
-    if (!apiKey) {
+    if (!DASHSCOPE_API_KEY) {
       return res.status(500).json({
         success: false,
-        message: '缺少 ELEVENLABS_API_KEY',
+        message: '缺少 DASHSCOPE_API_KEY',
       })
     }
 
@@ -409,43 +458,56 @@ app.post('/api/generate-cloned-audio', async (req, res) => {
     const normalizedText = normalizeChineseForSpeech(text)
 
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+      `${DASHSCOPE_BASE_URL}/services/aigc/multimodal-generation/generation`,
       {
         method: 'POST',
         headers: {
-          'xi-api-key': apiKey,
+          Authorization: `Bearer ${DASHSCOPE_API_KEY}`,
           'Content-Type': 'application/json',
-          Accept: 'audio/mpeg',
         },
         body: JSON.stringify({
-          text: normalizedText,
-          model_id: 'eleven_multilingual_v2',
-          language_code: 'zh',
+          model: QWEN_VC_TARGET_MODEL,
+          input: {
+            text: normalizedText,
+            voice: voiceId,
+            language_type: 'Chinese',
+          },
         }),
       }
     )
 
+    const data = await response.json()
+
     if (!response.ok) {
-      const errorText = await response.text()
       return res.status(response.status).json({
         success: false,
-        message: '克隆声音朗读失败',
-        error: errorText,
+        message: data?.message || '千问朗读失败',
+        raw: data,
       })
     }
 
-    const arrayBuffer = await response.arrayBuffer()
+    const audioUrl = data?.output?.audio?.url
+
+    if (!audioUrl) {
+      return res.status(500).json({
+        success: false,
+        message: '未获取到千问返回的音频 URL',
+        raw: data,
+      })
+    }
+
+    const arrayBuffer = await fetchArrayBufferFromUrl(audioUrl)
     const base64Audio = Buffer.from(arrayBuffer).toString('base64')
 
     res.json({
       success: true,
-      audioUrl: `data:audio/mpeg;base64,${base64Audio}`,
+      audioUrl: `data:audio/wav;base64,${base64Audio}`,
     })
   } catch (error) {
-    console.error('generate-cloned-audio error:', error)
+    console.error('qwen generate-cloned-audio error:', error)
     res.status(500).json({
       success: false,
-      message: '克隆声音朗读失败',
+      message: '千问朗读失败',
       error: error?.message || 'unknown error',
     })
   }
