@@ -1047,17 +1047,17 @@ function App() {
     return user
   }
 
-  const loadProfile = async (userId) => {
+const loadProfile = async (userId) => {
+  try {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
-      .single()
+      .maybeSingle()
 
-    if (!error && data) {
-      setProfileState(data)
-    } else {
-      setProfileState({
+    if (error) {
+      console.error('loadProfile error:', error)
+      return {
         nickname: '',
         baby_age: '',
         gender: '未设置',
@@ -1065,57 +1065,99 @@ function App() {
         style: '温柔安抚',
         voice: '未设置',
         default_voice_id: '',
-      })
+      }
+    }
+
+    return (
+      data || {
+        nickname: '',
+        baby_age: '',
+        gender: '未设置',
+        language: '中文',
+        style: '温柔安抚',
+        voice: '未设置',
+        default_voice_id: '',
+      }
+    )
+  } catch (error) {
+    console.error('loadProfile catch:', error)
+    return {
+      nickname: '',
+      baby_age: '',
+      gender: '未设置',
+      language: '中文',
+      style: '温柔安抚',
+      voice: '未设置',
+      default_voice_id: '',
     }
   }
+}
 
-  const loadStories = async (userId) => {
+const loadStories = async (userId) => {
+  try {
     const { data, error } = await supabase
       .from('stories')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
 
-    if (!error && data) {
-      const mapped = data.map((item) => ({
-        id: item.id,
-        label: item.label,
-        title: item.title,
-        meta: item.meta,
-        content: item.content,
-        createdAt: new Date(item.created_at).toLocaleString(),
-      }))
-      setStoryHistory(mapped)
-    } else {
-      setStoryHistory([])
+    if (error) {
+      console.error('loadStories error:', error)
+      return []
     }
+
+    return (data || []).map((item) => ({
+      id: item.id,
+      label: item.label,
+      title: item.title,
+      meta: item.meta,
+      content: item.content,
+      createdAt: new Date(item.created_at).toLocaleString(),
+    }))
+  } catch (error) {
+    console.error('loadStories catch:', error)
+    return []
   }
+}
 
   const loadVoices = async (userId) => {
+  try {
     const { data, error } = await supabase
       .from('voices')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
 
-    if (!error && data) {
-      const mapped = data.map((item) => ({
-        id: item.id,
-        name: item.name,
-        voiceId: item.voice_id,
-        sourceType: item.source_type,
-        isDefault: item.is_default,
-        createdAt: new Date(item.created_at).toLocaleString(),
-      }))
-      setVoices(mapped)
-    } else {
-      setVoices([])
+    if (error) {
+      console.error('loadVoices error:', error)
+      return []
     }
+
+    return (data || []).map((item) => ({
+      id: item.id,
+      name: item.name,
+      voiceId: item.voice_id,
+      sourceType: item.source_type,
+      isDefault: item.is_default,
+      createdAt: new Date(item.created_at).toLocaleString(),
+    }))
+  } catch (error) {
+    console.error('loadVoices catch:', error)
+    return []
   }
+}
 
   const loadAllUserData = async (userId) => {
-    await Promise.all([loadProfile(userId), loadStories(userId), loadVoices(userId)])
-  }
+  const [profileData, storiesData, voicesData] = await Promise.all([
+    loadProfile(userId),
+    loadStories(userId),
+    loadVoices(userId),
+  ])
+
+  setProfileState(profileData)
+  setStoryHistory(storiesData)
+  setVoices(voicesData)
+}
 
   const setProfile = async (nextProfile) => {
     const user = await getCurrentUser()
@@ -1269,7 +1311,8 @@ function App() {
   }
 
   useEffect(() => {
-    const init = async () => {
+  const init = async () => {
+    try {
       const {
         data: { session },
       } = await supabase.auth.getSession()
@@ -1278,16 +1321,32 @@ function App() {
 
       if (session?.user) {
         await loadAllUserData(session.user.id)
+      } else {
+        setProfileState({
+          nickname: '',
+          baby_age: '',
+          gender: '未设置',
+          language: '中文',
+          style: '温柔安抚',
+          voice: '未设置',
+          default_voice_id: '',
+        })
+        setStoryHistory([])
+        setVoices([])
       }
-
+    } catch (error) {
+      console.error('init error:', error)
+    } finally {
       setLoading(false)
     }
+  }
 
-    init()
+  init()
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    try {
       setSession(session)
 
       if (session?.user) {
@@ -1308,13 +1367,17 @@ function App() {
 
       setSelectedStory(null)
       setActiveTab('home')
+    } catch (error) {
+      console.error('onAuthStateChange error:', error)
+    } finally {
       setLoading(false)
-    })
-
-    return () => {
-      subscription.unsubscribe()
     }
-  }, [])
+  })
+
+  return () => {
+    subscription.unsubscribe()
+  }
+}, [])
 
   if (loading) {
     return (
